@@ -5,6 +5,7 @@ module.exports = class Application {
   constructor() {
     this.emmiter = new EventEmmiter();
     this.server = this._createServer();
+    this.middlewares = [];
   }
 
   addRouter(router) {
@@ -19,17 +20,36 @@ module.exports = class Application {
     })
   }
 
+  use(middleware) {
+    this.middlewares.push(middleware)
+  }
+
   listen(port, callback) {
     this.server.listen(port, callback)
   }
 
   _createServer() {
     return http.createServer((req, res) => {
-      const emmited = this.emmiter.emit(this._getRouteMask(req.url, req.method), req, res)
-    
-      if(!emmited) {
-        res.end()
-      }
+
+      let body = '';
+
+      req.on('data', (chunk) => {
+        body += chunk;
+      })
+
+      req.on('end', () => {
+        if(body) {
+          req.body = JSON.parse(body)
+        }
+        
+        this.middlewares.forEach(middleware => middleware(req, res))
+        const emmited = this.emmiter.emit(this._getRouteMask(req.url, req.method), req, res)
+
+        if(!emmited) {
+          res.end()
+        }
+      })
+
     });
   }
 
